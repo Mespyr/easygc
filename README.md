@@ -1,5 +1,5 @@
 # easygc
-EasyGC is a simple, header-only garbage collector which can be used in generated C code. It is most suitable for use in the output of compiler 
+EasyGC is a simple, header-only garbage collector which is most suited be used in generated C code.
 
 ### Pros
 - **Small:** `easygc` is only around 130 lines long, making it easy to embed into generated C code.
