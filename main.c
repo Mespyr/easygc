@@ -1,26 +1,34 @@
 #include "easygc.h"
 
-// User Code
-typedef struct {
-	int32_t x;
-	int32_t y;
-} Point;
+typedef struct LinkNum {
+    int32_t         num;
+    struct LinkNum *next;
+} LinkNum;
 
 int main() {
-	Point *p = gc_alloc(sizeof(Point));
+    // create new LinkNum struct, put it inside the first struct,
+    // and collect the `inner` ptr.
+    // since we incremented the count with `easygc_count_ref`,
+    // it wont get deallocated until the first LinkNum is.
 
-	p->x = 12;
-	p->y = 13;
-	printf("%d, %d\n", p->x, p->y);
+    LinkNum *n = easygc_alloc(sizeof(LinkNum));
+    n->num = 12;
 
-	gc_collect(p);
-	
-	Point *p2 = gc_alloc(sizeof(Point));
-	p2->x = 4;
-	p2->y = 17;
-	printf("%d, %d\n", p2->x, p2->y);
+    LinkNum *inner = easygc_alloc(sizeof(LinkNum));
+    inner->num = 14;
 
-	gc_collect(p2);
+    // since we're putting the ptr into the struct,
+    // we increment the ref count for the ptr
+    n->next = inner;
+    easygc_count_ref(inner);
 
-	return 0;
+    // we don't use `inner` variable anymore, so we collect it
+    easygc_collect(inner);
+
+    printf("%d, %d\n", n->num, n->next->num);
+
+    easygc_collect(n);  // collect `n`, which should deallocate both
+
+    easygc_clean();
+    return 0;
 }

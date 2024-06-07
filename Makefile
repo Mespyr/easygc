@@ -7,3 +7,6 @@ $(BIN): easygc.h main.c
 
 clean:
 	$(RM) $(BIN)
+
+format: easygc.h main.c
+	clang-format -i easygc.h main.c -style=file

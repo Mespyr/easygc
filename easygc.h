@@ -1,73 +1,131 @@
 #ifndef EASY_GC
 #define EASY_GC
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 typedef struct header {
-	size_t size;
-	struct header *next;
+    size_t         size;
+    size_t         count;
+    struct header *next;
 } header_t;
 
-static header_t  base = {.size = 0, .next = NULL}; // base; zero-sized block
-static header_t *freed_mem = &base; // first free block of memory
+static header_t *freed_mem = NULL;  // first free block of memory
 static header_t *used_mem = NULL;   // first used block of memory
 
-static header_t *find_free_header(size_t size);
-void *gc_alloc(size_t size);
-void gc_collect(void *root);
+void *easygc_alloc(size_t size);
+void  easygc_count_ref(void *ptr);
+void  easygc_collect(void *root);
+void  easygc_clean();
 
-#ifndef EASY_GC_IMPLEMENTATION
-#define EASY_GC_IMPLEMENTATION
+// implementation
 
-#define PTR_ADD(PTR, DIFF) (void*)((uintptr_t)PTR + DIFF)
-#define PTR_SUB(PTR, DIFF) (void*)((uintptr_t)PTR - DIFF)
+#define RAW_PTR(HDR_PTR) ((void *)((uintptr_t)HDR_PTR + sizeof(header_t)))
+#define HEADER(PTR) ((header_t *)((uintptr_t)PTR - sizeof(header_t)))
 
 static header_t *find_free_header(size_t size) {
-	if (freed_mem == &base) return NULL;
+    if (freed_mem == NULL) return NULL;
 
-	header_t* prev_hdr = NULL;
-	header_t* cur_hdr = freed_mem;
+    header_t *prev_hdr = NULL;
+    header_t *cur_hdr = freed_mem;
 
-	while (cur_hdr != &base) {
-		if (cur_hdr->size < size) {
-			prev_hdr = cur_hdr;
-			cur_hdr = cur_hdr->next;
-			continue;
-		}
-		// if the first header fit, make the next one the head
-		if (prev_hdr == NULL) freed_mem = cur_hdr->next;
-		// else, remove the inner header from the list
-		else prev_hdr->next = cur_hdr->next;
-		return cur_hdr;
-	}
-	return NULL;
+    while (cur_hdr != NULL) {
+        if (cur_hdr->size < size) {
+            prev_hdr = cur_hdr;
+            cur_hdr = cur_hdr->next;
+            continue;
+        }
+        // if the first header fit, make the next one the head
+        if (prev_hdr == NULL) freed_mem = cur_hdr->next;
+        // else, remove the inner header from the list
+        else
+            prev_hdr->next = cur_hdr->next;
+        return cur_hdr;
+    }
+    return NULL;
 }
 
-void *gc_alloc(size_t size) {
-	header_t* h = find_free_header(size);
-	if (h == NULL) {
-		// create new header, first get ptr-size aligned size and then malloc
-		size_t align_size = ((size + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1));
-		h = (header_t*)malloc(sizeof(header_t) + align_size);
-		if (h == NULL) {
-			fprintf(stderr, "memory allocation failed!\n");
-			exit(1);
-		}
-		h->size = align_size;
-	}
-	// put header into used memory
-	h->next = used_mem;
-	used_mem = h;
-	return PTR_ADD(h, sizeof(header_t));
+static bool in_heap(void *ptr) {
+    header_t *cur_hdr = used_mem;
+    while (cur_hdr != NULL) {
+        if (RAW_PTR(cur_hdr) == ptr) return true;
+        cur_hdr = cur_hdr->next;
+    }
+    return false;
 }
 
-void gc_collect(void *root) {
-	header_t *header = (header_t*)PTR_SUB(root, sizeof(header_t));
-	//printf("%zu\n", header->size);
+void *easygc_alloc(size_t size) {
+    header_t *h = find_free_header(size);
+    if (h == NULL) {
+        // create new header, first get ptr-size aligned size and then malloc
+        size_t align_size =
+            ((size + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1));
+        h = (header_t *)malloc(sizeof(header_t) + align_size);
+        if (h == NULL) {
+            fprintf(stderr, "memory allocation failed!\n");
+			easygc_clean();
+            exit(1);
+        }
+        h->size = align_size;
+    }
+    // put header into used memory
+    h->next = used_mem;
+    used_mem = h;
+    // set initial ref count
+    h->count = 1;
+    return RAW_PTR(h);
 }
 
-#endif
+void easygc_count_ref(void *ptr) {
+    if (in_heap(ptr)) HEADER(ptr)->count++;
+}
+
+void easygc_collect(void *ptr) {
+    if (!in_heap(ptr)) return;
+    header_t *header = HEADER(ptr);
+    if (--header->count != 0) return;
+
+    size_t num_chunks = header->size / sizeof(uintptr_t);
+    void **p = (void **)ptr;
+    for (unsigned int i = 0; i < num_chunks; i++) {
+        easygc_collect(*p);
+        p = (void **)((uintptr_t)p + sizeof(uintptr_t));
+    }
+    // put chunk into free mem
+    header->next = freed_mem;
+    freed_mem = header;
+    // remove header from used mem
+    header_t *cur_hdr = used_mem;
+    header_t *prev_hdr = NULL;
+    while (cur_hdr != NULL) {
+        if (cur_hdr != header) {
+            prev_hdr = cur_hdr;
+            cur_hdr = cur_hdr->next;
+            continue;
+        }
+        if (prev_hdr == NULL)
+            used_mem = cur_hdr->next;
+        else
+            prev_hdr->next = cur_hdr->next;
+        return;
+    }
+}
+
+void easygc_clean() {
+    // clean up all free blocks
+    while (freed_mem != NULL) {
+        header_t *t = freed_mem;
+        freed_mem = t->next;
+        free(t);
+    }
+    // clean up all used blocks
+    while (used_mem != NULL) {
+        header_t *t = used_mem;
+        used_mem = t->next;
+        free(t);
+    }
+}
+
 #endif
