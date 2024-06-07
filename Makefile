@@ -1,4 +1,4 @@
-BIN=easygc_test
+BIN=test
 
 all: $(BIN)
 
