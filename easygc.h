@@ -12,8 +12,8 @@ typedef struct header {
     struct header *next;
 } header_t;
 
-static header_t *freed_mem = NULL; // first free block of memory
-static header_t *used_mem = NULL;  // first used block of memory
+static header_t *freed_mem = NULL;  // first free block of memory
+static header_t *used_mem = NULL;   // first used block of memory
 
 void *easygc_alloc(size_t size);
 void  easygc_count_ref(void *ptr);
@@ -56,11 +56,10 @@ static bool in_heap(void *ptr) {
 
 void *easygc_alloc(size_t size) {
     header_t *h = find_free_header(size);
-											 
-	#ifdef EASY_GC_DEBUG_MODE
-	if (h != NULL)
-		printf("chunk reused: { size: %d, addr: %d }\n", h->size, h);
-	#endif
+
+#ifdef EASY_GC_DEBUG_MODE
+    if (h != NULL) printf("chunk reused: { size: %d, addr: %d }\n", h->size, h);
+#endif
 
     if (h == NULL) {
         // create new header, first get ptr-size aligned size and then malloc
@@ -69,14 +68,14 @@ void *easygc_alloc(size_t size) {
         h = (header_t *)malloc(sizeof(header_t) + align_size);
         if (h == NULL) {
             fprintf(stderr, "memory allocation failed!\n");
-			easygc_clean();
+            easygc_clean();
             exit(1);
         }
         h->size = align_size;
 
-		#ifdef EASY_GC_DEBUG_MODE
-		printf("new chunk allocated: { size: %d, addr: %p }\n", h->size, h);
-		#endif
+#ifdef EASY_GC_DEBUG_MODE
+        printf("new chunk allocated: { size: %d, addr: %p }\n", h->size, h);
+#endif
     }
     // put header into used memory
     h->next = used_mem;
@@ -104,7 +103,7 @@ void easygc_collect(void *ptr) {
     // remove header from used mem
     header_t *cur_hdr = used_mem;
     header_t *prev_hdr = NULL;
-	// cur_hdr
+    // cur_hdr
     while (cur_hdr != NULL) {
         if (cur_hdr != header) {
             prev_hdr = cur_hdr;
@@ -116,9 +115,9 @@ void easygc_collect(void *ptr) {
         else
             prev_hdr->next = cur_hdr->next;
 
-		#ifdef EASY_GC_DEBUG_MODE
-		printf("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
-		#endif
+#ifdef EASY_GC_DEBUG_MODE
+        printf("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
+#endif
 
         break;
     }
