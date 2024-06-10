@@ -1,12 +1,15 @@
-BIN=test
+CFLAGS=-std=c99 -O3 -flto -s -w -finline-functions -funroll-loops -march=native
 
-all: $(BIN)
+ALL_TESTS=tests/recursive_reference
 
-$(BIN): easygc.h main.c
-	$(CC) main.c -o $(BIN) 
+define compile_test
+$(1): easygc.h $(1).c
+	$(CC) $(CFLAGS) $(1).c -o $$@
+endef
+$(foreach test, $(ALL_TESTS), $(eval $(call compile_test, $(test))))
 
 clean:
-	$(RM) $(BIN)
+	$(RM) $(ALL_TESTS)
 
-format: easygc.h main.c
-	clang-format -i easygc.h main.c -style=file
+format: easygc.h
+	clang-format -i easygc.h -style=file
