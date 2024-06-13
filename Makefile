@@ -1,6 +1,8 @@
 CFLAGS=-std=c99 -O3 -flto -s -w -finline-functions -funroll-loops -march=native
 
-ALL_TESTS=tests/recursive_reference
+ALL_TESTS=tests/recursive_reference tests/array
+
+all: $(ALL_TESTS)
 
 define compile_test
 $(1): easygc.h $(1).c

@@ -17,18 +17,30 @@ static header_t *used_mem = NULL;   // first used block of memory
 
 void *easygc_alloc(size_t size);
 void  easygc_count_ref(void *ptr);
-void  easygc_collect(void *root);
+void  easygc_collect(void *ptr);
 void  easygc_clean();
 
 #define RAW_PTR(HDR_PTR) ((void *)((uintptr_t)HDR_PTR + sizeof(header_t)))
 #define HEADER(PTR) ((header_t *)((uintptr_t)PTR - sizeof(header_t)))
+#define ALIGN(SIZE) \
+    ((SIZE + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1))
+#define FATAL_ERROR(msg)      \
+    {                         \
+        fprintf(stderr, msg); \
+        easygc_clean();       \
+        exit(1);              \
+    }
+#ifdef EASY_GC_DEBUG_MODE
+#define DEBUG(...) fprintf(stderr, __VA_ARGS__);
+#else
+#define DEBUG(...) \
+    {}
+#endif
 
 static header_t *find_free_header(size_t size) {
     if (freed_mem == NULL) return NULL;
-
     header_t *prev_hdr = NULL;
     header_t *cur_hdr = freed_mem;
-
     while (cur_hdr != NULL) {
         if (cur_hdr->size < size) {
             prev_hdr = cur_hdr;
@@ -56,26 +68,15 @@ static bool in_heap(void *ptr) {
 
 void *easygc_alloc(size_t size) {
     header_t *h = find_free_header(size);
-
-#ifdef EASY_GC_DEBUG_MODE
-    if (h != NULL) printf("chunk reused: { size: %d, addr: %d }\n", h->size, h);
-#endif
+    if (h != NULL) DEBUG("chunk reused: { size: %d, addr: %p }\n", h->size, h);
 
     if (h == NULL) {
         // create new header, first get ptr-size aligned size and then malloc
-        size_t align_size =
-            ((size + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1));
+        size_t align_size = ALIGN(size);
         h = (header_t *)malloc(sizeof(header_t) + align_size);
-        if (h == NULL) {
-            fprintf(stderr, "memory allocation failed!\n");
-            easygc_clean();
-            exit(1);
-        }
+        if (h == NULL) FATAL_ERROR("memory allocation failed!\n");
         h->size = align_size;
-
-#ifdef EASY_GC_DEBUG_MODE
-        printf("new chunk allocated: { size: %d, addr: %p }\n", h->size, h);
-#endif
+        DEBUG("new chunk allocated: { size: %d, addr: %p }\n", h->size, h);
     }
     // put header into used memory
     h->next = used_mem;
@@ -114,11 +115,7 @@ void easygc_collect(void *ptr) {
             used_mem = cur_hdr->next;
         else
             prev_hdr->next = cur_hdr->next;
-
-#ifdef EASY_GC_DEBUG_MODE
-        printf("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
-#endif
-
+        DEBUG("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
         break;
     }
     // put chunk into free mem
