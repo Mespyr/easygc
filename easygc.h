@@ -2,9 +2,11 @@
 #define EASY_GC
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct header {
     size_t         size;
@@ -16,6 +18,7 @@ static header_t *freed_mem = NULL;  // first free block of memory
 static header_t *used_mem = NULL;   // first used block of memory
 
 void *easygc_alloc(size_t size);
+void *easygc_realloc(void *ptr, size_t new_size);
 void  easygc_count_ref(void *ptr);
 void  easygc_collect(void *ptr);
 void  easygc_clean();
@@ -58,12 +61,31 @@ static header_t *find_free_header(size_t size) {
 }
 
 static bool in_heap(void *ptr) {
+    if (ptr == NULL) return false;
     header_t *cur_hdr = used_mem;
     while (cur_hdr != NULL) {
         if (RAW_PTR(cur_hdr) == ptr) return true;
         cur_hdr = cur_hdr->next;
     }
     return false;
+}
+
+static inline void remove_hdr_from_used_mem(header_t *header) {
+    header_t *cur_hdr = used_mem;
+    header_t *prev_hdr = NULL;
+    while (cur_hdr != NULL) {
+        if (cur_hdr != header) {
+            prev_hdr = cur_hdr;
+            cur_hdr = cur_hdr->next;
+            continue;
+        }
+        if (prev_hdr == NULL)
+            used_mem = cur_hdr->next;
+        else
+            prev_hdr->next = cur_hdr->next;
+        DEBUG("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
+        break;
+    }
 }
 
 void *easygc_alloc(size_t size) {
@@ -86,6 +108,23 @@ void *easygc_alloc(size_t size) {
     return RAW_PTR(h);
 }
 
+void *easygc_realloc(void *ptr, size_t new_size) {
+    if (!in_heap(ptr))
+        FATAL_ERROR("can't reallocate memory not on the heap!\n");
+    header_t *old_hdr = HEADER(ptr);
+    if (old_hdr->size >= new_size) return ptr;
+
+    remove_hdr_from_used_mem(old_hdr);
+    // put old header into freed mem
+    old_hdr->next = freed_mem;
+    freed_mem = old_hdr;
+    // create new header
+    void     *new_ptr = easygc_alloc(new_size);
+    header_t *new_hdr = HEADER(new_ptr);
+    memcpy(new_ptr, RAW_PTR(old_hdr), old_hdr->size);
+    return new_ptr;
+}
+
 void easygc_count_ref(void *ptr) {
     if (in_heap(ptr)) HEADER(ptr)->count++;
 }
@@ -101,41 +140,28 @@ void easygc_collect(void *ptr) {
         easygc_collect(*p);
         p = (void **)((uintptr_t)p + sizeof(uintptr_t));
     }
-    // remove header from used mem
-    header_t *cur_hdr = used_mem;
-    header_t *prev_hdr = NULL;
-    // cur_hdr
-    while (cur_hdr != NULL) {
-        if (cur_hdr != header) {
-            prev_hdr = cur_hdr;
-            cur_hdr = cur_hdr->next;
-            continue;
-        }
-        if (prev_hdr == NULL)
-            used_mem = cur_hdr->next;
-        else
-            prev_hdr->next = cur_hdr->next;
-        DEBUG("chunk freed: { size: %d, addr: %p }\n", cur_hdr->size, cur_hdr);
-        break;
-    }
+    remove_hdr_from_used_mem(header);
     // put chunk into free mem
     header->next = freed_mem;
     freed_mem = header;
 }
 
 void easygc_clean() {
+    DEBUG("cleanup!\n");
     // clean up all free blocks
     while (freed_mem != NULL) {
         header_t *t = freed_mem;
         freed_mem = t->next;
         free(t);
     }
+    DEBUG("all free chunks freed\n");
     // clean up all used blocks
     while (used_mem != NULL) {
         header_t *t = used_mem;
         used_mem = t->next;
         free(t);
     }
+    DEBUG("all used chunks freed\n");
 }
 
 #endif

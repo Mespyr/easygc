@@ -2,6 +2,8 @@
 
 int *create_array(size_t size) {
 	int *ptr = easygc_alloc(sizeof(int) * size);
+	// returned items should not be collected
+	// since theyre passed on to the outside scope
 	return ptr;
 }
 
@@ -29,8 +31,8 @@ int main() {
 	arr[8] = 19;
 	arr[9] = 20;
 	print_array(arr, 10);
-
 	easygc_collect(arr);
+
 	easygc_clean();
 	return 0;
 }
