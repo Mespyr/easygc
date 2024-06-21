@@ -8,7 +8,7 @@ typedef struct Node {
     struct Node *next;
 } Node;
 
-typedef struct LinkedList {
+typedef struct {
 	struct Node *head;
 	int32_t size;
 } LinkedList;
