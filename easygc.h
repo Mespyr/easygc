@@ -27,19 +27,20 @@ void  easygc_clean();
 #define HEADER(PTR) ((header_t *)((uintptr_t)PTR - sizeof(header_t)))
 #define ALIGN(SIZE) \
     ((SIZE + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1))
-#define FATAL_ERROR(...)                           \
-    {                                              \
-        fprintf(stderr, "\x1b[31m[fatal error] "); \
-        fprintf(stderr, __VA_ARGS__);              \
-        fprintf(stderr, "\033[0m\n");              \
-        easygc_clean();                            \
-        exit(1);                                   \
+#define FATAL_ERROR(...)                                  \
+    {                                                     \
+        fprintf(stderr, "\x1b[31m[fatal error]\033[0m "); \
+        fprintf(stderr, __VA_ARGS__);                     \
+        fprintf(stderr, "\n");                            \
+        easygc_clean();                                   \
+        exit(1);                                          \
     }
 #ifdef EASY_GC_DEBUG_MODE
-#define DEBUG(...)                    \
-    {                                 \
-        fprintf(stderr, "[debug] ");  \
-        fprintf(stderr, __VA_ARGS__); \
+#define DEBUG(...)                                  \
+    {                                               \
+        fprintf(stderr, "\x1b[32m[debug]\033[0m "); \
+        fprintf(stderr, __VA_ARGS__);               \
+        fprintf(stderr, "\n");                      \
     };
 #else
 #define DEBUG(...) \
@@ -89,14 +90,14 @@ static inline void remove_hdr_from_used_mem(header_t *header) {
             used_mem = cur_hdr->next;
         else
             prev_hdr->next = cur_hdr->next;
-        DEBUG("chunk freed(%d, %p)\n", cur_hdr->size, cur_hdr);
+        DEBUG("free(%d, %p)", cur_hdr->size, cur_hdr);
         break;
     }
 }
 
 void *easygc_alloc(size_t size) {
     header_t *h = find_free_header(size);
-    if (h != NULL) DEBUG("chunk reused(%d, %p)\n", h->size, h);
+    if (h != NULL) DEBUG("reuse(%d, %p)", h->size, h);
 
     if (h == NULL) {
         // create new header, first get ptr-size aligned size and then malloc
@@ -104,10 +105,10 @@ void *easygc_alloc(size_t size) {
         h = (header_t *)malloc(sizeof(header_t) + align_size);
         if (h == NULL)
             FATAL_ERROR(
-                "failed to allocate block of memory with a size of %zu bytes",
+                "failed to allocate memory with a size of %zu bytes",
                 align_size);
         h->size = align_size;
-        DEBUG("new chunk(%d, %p)\n", h->size, h);
+        DEBUG("new(%d, %p)", h->size, h);
     }
     // put header into used memory
     h->next = used_mem;
@@ -118,7 +119,7 @@ void *easygc_alloc(size_t size) {
 }
 
 void *easygc_realloc(void *ptr, size_t new_size) {
-    if (!in_heap(ptr)) FATAL_ERROR("can't reallocate memory not on the heap!");
+    if (!in_heap(ptr)) FATAL_ERROR("can't reallocate memory not on the heap");
     header_t *old_hdr = HEADER(ptr);
     if (old_hdr->size >= new_size) return ptr;
     if (old_hdr->count > 1)
@@ -129,8 +130,7 @@ void *easygc_realloc(void *ptr, size_t new_size) {
     old_hdr->next = freed_mem;
     freed_mem = old_hdr;
     // create new header
-    void     *new_ptr = easygc_alloc(new_size);
-    header_t *new_hdr = HEADER(new_ptr);
+    void *new_ptr = easygc_alloc(new_size);
     memcpy(new_ptr, RAW_PTR(old_hdr), old_hdr->size);
     return new_ptr;
 }
@@ -157,7 +157,7 @@ void easygc_collect(void *ptr) {
 }
 
 void easygc_clean() {
-    DEBUG("cleaning up heap\n");
+    DEBUG("cleaning up heap");
     // clean up all free blocks
     while (freed_mem != NULL) {
         header_t *t = freed_mem;

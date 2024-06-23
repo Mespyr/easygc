@@ -1,6 +1,6 @@
 CFLAGS=-std=c99 -O3 -flto -s -w -finline-functions -funroll-loops -march=native
 
-ALL_TESTS=tests/recursive_reference tests/array tests/fancy_strings tests/fails
+ALL_TESTS=tests/recursive_reference tests/array tests/fancy_strings tests/fails tests/list_impl
 
 all: $(ALL_TESTS)
 
