@@ -37,7 +37,7 @@ void print(list_u64 *xs) {
 
 int main() {
 	list_u64 *new_list = list_u64_new(10);
-	for (int i = 0; i <= 30; i++)
+	for (int i = 0; i <= 400; i++)
 		append(new_list, i);
 	
 	print(new_list);
