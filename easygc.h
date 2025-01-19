@@ -169,7 +169,7 @@ void easygc_clean() {
         header_t *t = used_mem;
         used_mem = t->next;
         free(t);
-    }
+	}
 }
 
 #endif
