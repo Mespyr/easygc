@@ -2,12 +2,11 @@
 EasyGC is a simple, header-only garbage collector which is most suited for generated C code.
 
 ### Pros
-- **Small:** EasyGC is less than 200 lines long, making it easy to embed into generated C code.
+- **Small:** EasyGC is 200 lines long, making it easy to embed into generated C code.
 - **Simple:** There are only four functions in the library that you need to use.
 
 ### Con
 - **Slowish:** Since EasyGC is a reference-counter, it takes slightly longer than other algorithms to actually do stuff.
-- **Uses Malloc:** I'm too lazy to implement my own memory allocator that is cross-platform 😔
 
 ## Usage
 

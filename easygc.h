@@ -8,6 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 typedef struct header {
     size_t         size;
     size_t         count;
@@ -46,6 +53,25 @@ void  easygc_clean();
 #define DEBUG(...) \
     {}
 #endif
+
+// cross-platform memory alloc/free functions
+static inline void *os_alloc(size_t size) {
+#if defined(_WIN32)
+    return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else
+    void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return (ptr == MAP_FAILED) ? NULL : ptr;
+#endif
+}
+
+static inline void os_free(void *ptr, size_t size) {
+#if defined(_WIN32)
+    VirtualFree(ptr, 0, MEM_RELEASE);
+#else
+    munmap(ptr, size);
+#endif
+}
 
 static inline header_t *find_free_header(size_t size) {
     if (freed_mem == NULL) return NULL;
@@ -100,13 +126,12 @@ void *easygc_alloc(size_t size) {
     if (h != NULL) DEBUG("reuse(%d, %p)", h->size, h);
 
     if (h == NULL) {
-        // create new header, first get ptr-size aligned size and then malloc
+        // create new header, first get ptr-size aligned size and then alloc
         size_t align_size = ALIGN(size);
-        h = (header_t *)malloc(sizeof(header_t) + align_size);
+        h = (header_t *)os_alloc(sizeof(header_t) + align_size);
         if (h == NULL)
-            FATAL_ERROR(
-                "failed to allocate memory with a size of %zu bytes",
-                align_size);
+            FATAL_ERROR("failed to allocate memory with a size of %zu bytes",
+                        align_size);
         h->size = align_size;
         DEBUG("new(%d, %p)", h->size, h);
     }
@@ -162,14 +187,14 @@ void easygc_clean() {
     while (freed_mem != NULL) {
         header_t *t = freed_mem;
         freed_mem = t->next;
-        free(t);
+        os_free(t, t->size + sizeof(header_t));
     }
     // clean up all used blocks
     while (used_mem != NULL) {
         header_t *t = used_mem;
         used_mem = t->next;
-        free(t);
-	}
+        os_free(t, t->size + sizeof(header_t));
+    }
 }
 
 #endif
