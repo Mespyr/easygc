@@ -32,8 +32,7 @@ void  easygc_clean();
 
 #define RAW_PTR(HDR_PTR) ((void *)((uintptr_t)HDR_PTR + sizeof(header_t)))
 #define HEADER(PTR) ((header_t *)((uintptr_t)PTR - sizeof(header_t)))
-#define ALIGN(SIZE) \
-    ((SIZE + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1))
+#define ALIGN(SIZE) ((SIZE + (sizeof(uintptr_t) - 1)) & ~(sizeof(uintptr_t) - 1))
 #define FATAL_ERROR(...)                                  \
     {                                                     \
         fprintf(stderr, "\x1b[31m[fatal error]\033[0m "); \
@@ -59,8 +58,7 @@ static inline void *os_alloc(size_t size) {
 #if defined(_WIN32)
     return VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #else
-    void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     return (ptr == MAP_FAILED) ? NULL : ptr;
 #endif
 }
@@ -130,8 +128,7 @@ void *easygc_alloc(size_t size) {
         size_t align_size = ALIGN(size);
         h = (header_t *)os_alloc(sizeof(header_t) + align_size);
         if (h == NULL)
-            FATAL_ERROR("failed to allocate memory with a size of %zu bytes",
-                        align_size);
+            FATAL_ERROR("failed to allocate memory with a size of %zu bytes", align_size);
         h->size = align_size;
         DEBUG("new(%d, %p)", h->size, h);
     }
@@ -147,8 +144,7 @@ void *easygc_realloc(void *ptr, size_t new_size) {
     if (!in_heap(ptr)) FATAL_ERROR("can't reallocate memory not on the heap");
     header_t *old_hdr = HEADER(ptr);
     if (old_hdr->size >= new_size) return ptr;
-    if (old_hdr->count > 1)
-        FATAL_ERROR("can't reallocate pointer which has multiple references");
+    if (old_hdr->count > 1) FATAL_ERROR("can't reallocate pointer which has multiple references");
 
     remove_hdr_from_used_mem(old_hdr);
     // put old header into freed mem
